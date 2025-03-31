@@ -1,6 +1,44 @@
 # nlp1-business-reviews
 
-#### Respect the following architecture
+## List of tasks
+
+### Dataset
+
+- [ ] Present the dataset
+- [ ] Pre-processing (normalization and token)
+- [ ] Exploratory analysis (statistics, classes, token, ...)
+      
+***
+
+### Classification
+#### Data representation
+
+- [ ] tf-idf
+- [ ] word2vec
+
+#### Models
+
+- [ ] Naive Bayesian
+- [ ] Logistic Regression
+- [ ] Feedforward neural network
+- [ ] Recurent neural network
+- [ ] Transformer
+
+***
+### Text generation
+#### Data representation
+
+- [ ] tf-idf
+- [ ] word2vec
+- [ ] n-gram
+
+#### Models
+
+- [ ] Feedforward neural network
+- [ ] Recurent neural network
+- [ ] Transformer
+***
+## Respect the following architecture
 
 ```
 .
