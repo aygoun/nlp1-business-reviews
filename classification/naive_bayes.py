@@ -14,7 +14,7 @@ sys.path.append(project_root)
 
 from utils.classifier import aspect_keywords
 
-extracted_data_set = "./data_set/processed_reviews_small.json"
+extracted_data_set = "./data_set/yelp_subset_review.json"
 
 
 # Function to label aspects based on keywords
