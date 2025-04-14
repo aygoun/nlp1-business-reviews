@@ -1,6 +1,7 @@
 # nlp1-business-reviews
 
 ## Collaborators
+
 - Angela Saade
 - Aurélien Daudin
 - Armand Blin
@@ -12,27 +13,30 @@
 ### Dataset
 
 - [ ] Present the dataset (Aurélien)
-- [ ] Pre-processing (normalization and token) (Armand)
+- [x] Pre-processing (normalization and token) (Armand)
 - [ ] Exploratory analysis (statistics, classes, token, ...) (Aurélien)
-      
-***
+
+---
 
 ### Classification
+
 #### Data representation
 
-- [X] tf-idf (Armand / Angela)
+- [x] tf-idf (Armand / Angela)
 - [ ] word2vec (Armand / Angela)
 
 #### Models
 
-- [X] Naive Bayesian (Armand)
-- [X] Logistic Regression (Angela)
+- [x] Naive Bayesian (Armand)
+- [x] Logistic Regression (Angela)
 - [ ] Feedforward neural network (Gabriel)
 - [ ] Recurent neural network (Angela)
 - [ ] Transformer (Aurélien)
 
-***
+---
+
 ### Text generation
+
 #### Data representation
 
 - [ ] tf-idf
@@ -44,7 +48,9 @@
 - [ ] Feedforward neural network (Armand)
 - [ ] Recurent neural network (Gabriel)
 - [ ] Transformer (Baptiste)
-***
+
+---
+
 ## Respect the following architecture
 
 ```
