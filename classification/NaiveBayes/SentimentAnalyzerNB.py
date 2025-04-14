@@ -7,7 +7,7 @@ from sklearn.pipeline import Pipeline
 from sklearn.metrics import classification_report, confusion_matrix, accuracy_score
 import matplotlib.pyplot as plt
 import seaborn as sns
-from tokenizer import Tokenizer
+from tokenizer.tokenizer import Tokenizer
 
 DATA_SET = "./data_set/yelp_subset_review.json"
 
@@ -217,7 +217,7 @@ if __name__ == "__main__":
 
     print("\nExample Predictions:")
     for result in results:
-        print(f"- Review: {result['review']}")
+        print(f"Review: {result['review']}")
         print(
             f"-> Sentiment: {result['sentiment']} (Confidence: {result['confidence']:.4f})"
         )
