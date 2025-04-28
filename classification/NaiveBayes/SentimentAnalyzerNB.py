@@ -44,7 +44,9 @@ class SentimentAnalyzerNB:
     def prepare_data(self, df):
         """Prepare the data for sentiment analysis"""
         # Clean the text data
-        df["cleaned_text"] = df["text"].apply(self.tokenizer.preprocess_text)
+        df["cleaned_text"] = df["text"].apply(
+            lambda x: " ".join(self.tokenizer.get_tokens(x))
+        )
 
         # Convert stars to sentiment labels
         df["sentiment"] = df["stars"].apply(lambda x: 1 if x >= self.threshold else 0)
