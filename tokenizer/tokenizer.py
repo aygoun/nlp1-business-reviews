@@ -15,14 +15,9 @@ class Tokenizer:
         self.lemmatizer = WordNetLemmatizer()
         self.stop_words = set(stopwords.words("english"))
 
-    def preprocess_text(self, text):
-        """Clean and preprocess review text
-
-        Args:
-            text (str): Input text to preprocess
-
-        Returns:
-            str: Preprocessed text
+    def get_tokens(self, text):
+        """
+        Clean, preprocess and tokenize text
         """
         # Convert to lowercase
         text = text.lower()
@@ -32,10 +27,8 @@ class Tokenizer:
 
         # Tokenization and lemmatization
         tokens = nltk.word_tokenize(text)
-        cleaned_tokens = [
+        return [
             self.lemmatizer.lemmatize(token)
             for token in tokens
             if token not in self.stop_words and len(token) > 2
         ]
-
-        return " ".join(cleaned_tokens)
