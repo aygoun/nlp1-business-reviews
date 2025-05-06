@@ -170,7 +170,7 @@ class SentimentAnalyzerNB:
 
         # Preprocess the reviews
         preprocessed_reviews = [
-            self.tokenizer.preprocess_text(review) for review in reviews
+            " ".join(self.tokenizer.get_tokens(review)) for review in reviews
         ]
 
         # Make predictions
@@ -223,3 +223,29 @@ if __name__ == "__main__":
         print(
             f"-> Sentiment: {result['sentiment']} (Confidence: {result['confidence']:.4f})"
         )
+
+"""
+Model Evaluation:
+Accuracy: 0.8874
+
+Classification Report:
+              precision    recall  f1-score   support
+
+    Negative       0.90      0.73      0.81       686
+    Positive       0.88      0.96      0.92      1454
+
+    accuracy                           0.89      2140
+   macro avg       0.89      0.85      0.86      2140
+weighted avg       0.89      0.89      0.88      2140
+
+
+Example Predictions:
+Review: The food was amazing and the service was excellent!
+-> Sentiment: Positive (Confidence: 0.9894)
+Review: Worst experience ever. The staff was rude and the food was cold.
+-> Sentiment: Negative (Confidence: 0.9959)
+Review: The ambiance was nice but the food was just okay.
+-> Sentiment: Negative (Confidence: 0.8075)
+Review: Never add a greater dinner in my life. Go !!!
+-> Sentiment: Positive (Confidence: 0.7062)
+"""
