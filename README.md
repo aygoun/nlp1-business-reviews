@@ -12,9 +12,9 @@
 
 ### Dataset
 
-- [ ] Present the dataset (Aurélien)
+- [X] Present the dataset (Aurélien)
 - [x] Pre-processing (normalization and token) (Armand)
-- [ ] Exploratory analysis (statistics, classes, token, ...) (Aurélien)
+- [X] Exploratory analysis (statistics, classes, token, ...) (Aurélien)
 
 ---
 
