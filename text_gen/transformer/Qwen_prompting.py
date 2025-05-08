@@ -19,7 +19,7 @@ df = pd.read_pickle('../../data_set/reviews2.pkl')
 # Parameters
 MAX_TOKENS = 32000
 GEN_TOKENS = 512
-CHUNK_MAX_TOKENS = MAX_TOKENS - GEN_TOKENS - 512  # Leave space for prompt and generation
+CHUNK_MAX_TOKENS = MAX_TOKENS - GEN_TOKENS - 1024  # Leave space for prompt and generation
 
 restaurant_name = "HipCityVeg"
 reviews = df[df['restaurant_name'] == restaurant_name]['text'].tolist()
