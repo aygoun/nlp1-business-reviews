@@ -8,6 +8,10 @@ import io
 import base64
 import numpy as np
 
+from text_gen.transformer.Qwen_prompting import QwenReviewGenerator
+from text_gen.transformer.Custom_prompting import CustomReviewGenerator
+from text_gen.transformer.Pegasus_prompting import PegasusReviewGenerator
+
 # Set page configuration
 st.set_page_config(
     page_title="Yelp Reviews Analysis",
@@ -63,9 +67,18 @@ st.markdown("""
 # App title
 st.title("Yelp Reviews Analysis Interface")
 
+# Function to load and cache the model
+@st.cache_resource
+def load_models():
+    """
+    Load the Qwen review generator model
+    """
+    return QwenReviewGenerator(data_path="data_set/reviews2.pkl"), CustomReviewGenerator(data_path="data_set/reviews2.pkl", model_path="text_gen/transformer/pegasus_finetuned"), PegasusReviewGenerator(data_path="data_set/reviews2.pkl")
+
+
 # Function to load business data
 @st.cache_data
-def load_business_data(file_path="../data_set/yelp_academic_dataset_business.json"):
+def load_business_data(file_path="data_set/yelp_academic_dataset_business.json"):
     """
     Load business data from the Yelp academic dataset JSON file
     """
@@ -116,17 +129,10 @@ def generate_review(business, model_type):
         time.sleep(1)  # Simulate processing time
     
     business_name = business["name"]
-    business_type = business["categories"].split(",")[0].strip()
+    # business_type = business["categories"].split(",")[0].strip()
     
-    if model_type == "positive":
-        review = f"I absolutely loved my experience at {business_name}! As a {business_type}, they really exceed expectations. The staff was incredibly helpful and the service was top-notch. I would definitely recommend this place to anyone looking for quality service in this area."
-        sentiment_score = 4.8
-    elif model_type == "critical":
-        review = f"My visit to {business_name} was somewhat disappointing. While they offer standard {business_type} services, I found the overall experience to be mediocre. The waiting time was longer than expected and the value for money wasn't great. There's definitely room for improvement."
-        sentiment_score = 2.3
-    else:  # default
-        review = f"{business_name} provides {business_type} services that meet the standard expectations. My experience was generally positive with a few minor issues. The staff was professional and the facilities were clean. It's a solid option if you're in the area and need these services."
-        sentiment_score = 3.5
+    review = model_type.gen_review(business_name)
+    sentiment_score = random.uniform(1.0, 5.0)  # Simulate sentiment score
     
     return review, sentiment_score
 
@@ -173,6 +179,9 @@ def get_sentiment_description(score):
 
 # Main application
 def main():
+    # Initilize models
+    qwen_model, custom_model, pegasus_model = load_models()
+    models = {"qwen": qwen_model, "custom": custom_model, "pegasus": pegasus_model}
     # Initialize session state if not present
     if 'businesses' not in st.session_state:
         st.session_state.businesses = load_business_data()
@@ -213,9 +222,12 @@ def main():
         # Model selection
         st.subheader("Review Generation")
         model_options = {
-            "default": "Default Review Generator",
-            "positive": "Positive Biased Generator",
-            "critical": "Critical Review Generator"
+            # "default": "Default Review Generator",
+            # "positive": "Positive Biased Generator",
+            # "critical": "Critical Review Generator"
+            "qwen": "Qwen Transformer Generator",
+            "pegasus": "Pegasus Transformer Generator",
+            "custom": "Custom Transformer Generator"
         }
         selected_model = st.selectbox(
             "Select Review Model",
@@ -258,7 +270,7 @@ def main():
         
         # Generate review if button was clicked
         if generate_button or (st.session_state.generated_review == "" and selected_business):
-            review, score = generate_review(selected_business, selected_model)
+            review, score = generate_review(selected_business, models[selected_model])
             st.session_state.generated_review = review
             st.session_state.sentiment_score = score
         

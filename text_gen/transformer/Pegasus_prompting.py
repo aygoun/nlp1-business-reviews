@@ -2,50 +2,44 @@ from transformers import PegasusTokenizer, PegasusForConditionalGeneration, pipe
 import torch
 import pandas as pd
 
-# Model setup
-model_name = "google/pegasus-xsum"
-tokenizer = PegasusTokenizer.from_pretrained(model_name)
-model = PegasusForConditionalGeneration.from_pretrained(model_name)
-summarizer = pipeline("summarization", model=model, tokenizer=tokenizer, device=0 if torch.cuda.is_available() else -1)
+class PegasusReviewGenerator:
+    def __init__(self, model_name="google/pegasus-xsum", data_path='../../data_set/reviews2.pkl'):
+        # Load the Pegasus model and tokenizer
+        self.tokenizer = PegasusTokenizer.from_pretrained(model_name)
+        self.model = PegasusForConditionalGeneration.from_pretrained(model_name)
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.model = self.model.to(self.device)
+        self.summarizer = pipeline("summarization", model=self.model, tokenizer=self.tokenizer, device=0 if torch.cuda.is_available() else -1)
 
-# Load the dataset
-df = pd.read_pickle('../../data_set/reviews2.pkl')
+        self.df = pd.read_pickle(data_path)  # Load your dataset
+        self.MAX_INPUT_TOKENS = 1024
+        self.CHUNK_MAX_CHARS = 3000
 
-# Parameters
-MAX_INPUT_TOKENS = 1024
-CHUNK_MAX_CHARS = 3000
-
-restaurant_name = "HipCityVeg"
-reviews = df[df['restaurant_name'] == restaurant_name]['text'].tolist()
-
-
-def chunk_reviews(reviews, max_chars):
-    chunks, current_chunk, current_len = [], [], 0
-    for review in reviews:
-        if current_len + len(review) > max_chars:
+    def chunk_reviews(reviews, max_chars):
+        chunks, current_chunk, current_len = [], [], 0
+        for review in reviews:
+            if current_len + len(review) > max_chars:
+                chunks.append(" ".join(current_chunk))
+                current_chunk = []
+                current_len = 0
+            current_chunk.append(review)
+            current_len += len(review)
+        if current_chunk:
             chunks.append(" ".join(current_chunk))
-            current_chunk = []
-            current_len = 0
-        current_chunk.append(review)
-        current_len += len(review)
-    if current_chunk:
-        chunks.append(" ".join(current_chunk))
-    return chunks
+        return chunks
 
-# Step 1: Break into chunks
-chunks = chunk_reviews(reviews, CHUNK_MAX_CHARS)
+    def gen_review(self, restaurant_name):
+        reviews = self.df[self.df['restaurant_name'] == restaurant_name]['text'].tolist()
 
-# Step 2: Summarize each chunk
-partial_summaries = []
-for i, chunk in enumerate(chunks):
-    print(f"\n--- Summarizing chunk {i+1}/{len(chunks)} ---")
-    summary = summarizer(chunk, max_length=60, min_length=20, do_sample=False)[0]['summary_text']
-    print(f"Partial summary {i+1}: {summary}")
-    partial_summaries.append(summary)
+        review_chunks = self.chunk_reviews(reviews, self.CHUNK_MAX_CHARS)
 
-# Step 3: Final summary from the summaries
-final_input = " ".join(partial_summaries)
-final_summary = summarizer(final_input, max_length=60, min_length=20, do_sample=False)[0]['summary_text']
-
-print("\n=== Final Summary ===")
-print(final_summary)
+        partial_summaries = []
+        for i, chunk in enumerate(review_chunks):
+            print(f"\n--- Summarizing chunk {i+1}/{len(review_chunks)} ---")
+            summary = self.summarizer(chunk, max_length=60, min_length=20, do_sample=False)[0]['summary_text']
+            print(f"Partial summary {i+1}: {summary}")
+            partial_summaries.append(summary)
+        
+        final_input = " ".join(partial_summaries)
+        final_summary = self.summarizer(final_input, max_length=60, min_length=20, do_sample=False)[0]['summary_text']
+        return final_summary
