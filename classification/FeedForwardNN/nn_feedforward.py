@@ -9,22 +9,16 @@ from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score, classification_report
 from torch.utils.data import Dataset, DataLoader
 from collections import Counter
-import nltk
-from nltk.corpus import stopwords
 import matplotlib.pyplot as plt
-
-# Download NLTK resources if needed
-try:
-    nltk.data.find('corpora/stopwords')
-except LookupError:
-    nltk.download('stopwords')
+from tokenizer.tokenizer import Tokenizer  # Import custom tokenizer
 
 # Define a PyTorch Dataset
 class ReviewDataset(Dataset):
-    def __init__(self, texts, ratings, vocab, max_length=200):
+    def __init__(self, texts, ratings, vocab, tokenizer, max_length=200):
         self.texts = texts
         self.ratings = ratings
         self.vocab = vocab
+        self.tokenizer = tokenizer
         self.max_length = max_length
         
     def __len__(self):
@@ -34,8 +28,8 @@ class ReviewDataset(Dataset):
         text = self.texts[idx]
         rating = self.ratings[idx]
         
-        # Convert text to sequence of indices
-        tokens = self.tokenize(text)
+        # Use custom tokenizer
+        tokens = self.tokenizer.get_tokens(text)
         seq = [self.vocab.get(token, self.vocab['<UNK>']) for token in tokens]
         
         # Pad or truncate to max_length
@@ -45,12 +39,6 @@ class ReviewDataset(Dataset):
             seq = seq[:self.max_length]
             
         return torch.tensor(seq, dtype=torch.long), torch.tensor(rating - 1, dtype=torch.long)  # 0-indexed classes
-    
-    def tokenize(self, text):
-        # Simple tokenization
-        text = text.lower()
-        text = re.sub(r'[^\w\s]', '', text)  # Remove punctuation
-        return text.split()
 
 # Neural Network Model
 class ReviewClassifier(nn.Module):
@@ -80,40 +68,36 @@ class ReviewClassifier(nn.Module):
 
 # Function to load and preprocess the data
 def load_data(file_path):
-    data = []
-    with open(file_path, 'r') as f:
-        for line in f:
-            data.append(json.loads(line))
-    
-    df = pd.DataFrame(data)
+    if file_path.endswith('.pkl'):
+        df = pd.read_pickle(file_path)
+    else:
+        data = []
+        with open(file_path, 'r') as f:
+            for line in f:
+                data.append(json.loads(line))
+        df = pd.DataFrame(data)
     return df
 
 # Preprocess and build vocabulary
-def preprocess_data(df):
+def preprocess_data(df, tokenizer):
     # Keep only necessary columns
-    df = df[['text', 'stars']]
+    df = df[['text', 'stars']].copy()
     
-    # Basic text preprocessing
-    df['text'] = df['text'].str.lower()
-    
-    # Build vocabulary
-    stop_words = set(stopwords.words('english'))
-    all_words = []
-    
+    # Use custom tokenizer to get tokens for all texts
+    all_tokens = []
     for text in df['text']:
-        text = re.sub(r'[^\w\s]', '', text)  # Remove punctuation
-        words = text.split()
-        all_words.extend([w for w in words if w not in stop_words])
+        tokens = tokenizer.get_tokens(text)
+        all_tokens.extend(tokens)
     
-    # Get most common words
-    word_counts = Counter(all_words)
-    vocab_size = 10000  # Use top 10000 words
-    most_common = word_counts.most_common(vocab_size - 2)  # -2 for <PAD> and <UNK>
+    # Get most common tokens
+    token_counts = Counter(all_tokens)
+    vocab_size = 10000  # Use top 10000 tokens
+    most_common = token_counts.most_common(vocab_size - 2)  # -2 for <PAD> and <UNK>
     
     # Create vocabulary dictionary
     vocab = {'<PAD>': 0, '<UNK>': 1}
-    for word, _ in most_common:
-        vocab[word] = len(vocab)
+    for token, _ in most_common:
+        vocab[token] = len(vocab)
     
     return df, vocab
 
@@ -177,27 +161,15 @@ def main():
     device = torch.device('mps' if torch.backends.mps.is_available() else 'cpu')
     print(f"Using device: {device}")
     
+    # Initialize custom tokenizer
+    tokenizer = Tokenizer()
+    
     # Load and preprocess data
     print("Loading and preprocessing data...")
-    # Replace with your actual data path
     file_path = "data_set/reviews.pkl"  
     
-    # # For demonstration, let's create a small sample dataset
-    # sample_data = [
-    #     {"review_id": "YziM_B_tSwtoMnM6Peew7w", "stars": 4.0,
-    #      "text": "My girlfriend and I stopped by in Boise for a night and decided to give the fork a try... this shit is delicious"},
-    #     {"review_id": "sample2", "stars": 5.0, 
-    #      "text": "Absolutely amazing service and food! The chef is incredible and I can't wait to come back."},
-    #     {"review_id": "sample3", "stars": 2.0, 
-    #      "text": "Food was okay but service was extremely slow. Waited over an hour for our entrees."},
-    #     {"review_id": "sample4", "stars": 1.0, 
-    #      "text": "Terrible experience. The food was cold and they charged us for items we didn't order."},
-    #     {"review_id": "sample5", "stars": 3.0, 
-    #      "text": "Nothing special but nothing terrible either. Pretty average place with average food."}
-    # ]
-    
-    df = pd.read_pickle(file_path)
-    df, vocab = preprocess_data(df)
+    df = load_data(file_path)
+    df, vocab = preprocess_data(df, tokenizer)
     
     # Split data
     X_train, X_test, y_train, y_test = train_test_split(
@@ -205,8 +177,8 @@ def main():
     )
     
     # Create datasets and dataloaders
-    train_dataset = ReviewDataset(X_train, y_train, vocab)
-    test_dataset = ReviewDataset(X_test, y_test, vocab)
+    train_dataset = ReviewDataset(X_train, y_train, vocab, tokenizer)
+    test_dataset = ReviewDataset(X_test, y_test, vocab, tokenizer)
     
     train_loader = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True)
     test_loader = DataLoader(test_dataset, batch_size=BATCH_SIZE)
@@ -265,13 +237,11 @@ def main():
     plt.show()
     
     # Example prediction function
-    def predict_rating(review_text, model, vocab, max_length=200):
+    def predict_rating(review_text, model, vocab, tokenizer, max_length=200):
         model.eval()
         
-        # Preprocess and tokenize
-        text = review_text.lower()
-        text = re.sub(r'[^\w\s]', '', text)
-        tokens = text.split()
+        # Use custom tokenizer
+        tokens = tokenizer.get_tokens(review_text)
         
         # Convert to indices
         seq = [vocab.get(token, vocab['<UNK>']) for token in tokens]
@@ -294,7 +264,7 @@ def main():
     
     # Test with a new review
     test_review = "The food was pretty good but the service was extremely slow. I might come back again."
-    predicted_rating = predict_rating(test_review, model, vocab)
+    predicted_rating = predict_rating(test_review, model, vocab, tokenizer)
     print(f"\nTest Review: {test_review}")
     print(f"Predicted Rating: {predicted_rating} stars")
     
@@ -318,8 +288,13 @@ def main():
 
 # Example of loading and using the saved model
 def load_and_use_model(model_path, review_text):
+    from tokenizer.tokenizer import Tokenizer
+    
+    # Initialize custom tokenizer
+    tokenizer = Tokenizer()
+    
     # Load the saved model
-    checkpoint = torch.load(model_path)
+    checkpoint = torch.load(model_path,weights_only=True)
     vocab = checkpoint['vocab']
     config = checkpoint['config']
     
@@ -339,10 +314,8 @@ def load_and_use_model(model_path, review_text):
     # Set to evaluation mode
     model.eval()
     
-    # Preprocess the review
-    text = review_text.lower()
-    text = re.sub(r'[^\w\s]', '', text)
-    tokens = text.split()
+    # Use custom tokenizer
+    tokens = tokenizer.get_tokens(review_text)
     
     # Convert to indices
     max_length = 200
@@ -365,6 +338,11 @@ def load_and_use_model(model_path, review_text):
     return predicted_class + 1  # Convert back to 1-5 scale
 
 # Example usage
-predicted_rating = load_and_use_model('review_classifier_model.pth', 
-                                     "98")
-print(f"Predicted Rating: {predicted_rating} stars")
+if __name__ == "__main__":
+    review = "The food was delicious but the service was slow."
+
+    predicted_rating = load_and_use_model('review_classifier_model.pth', 
+                                          review)
+    
+    print(f"Test Review: {review}")
+    print(f"Predicted Rating: {predicted_rating} stars")
