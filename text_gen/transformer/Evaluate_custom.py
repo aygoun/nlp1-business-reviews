@@ -1,60 +1,65 @@
-import math
-import numpy as np
+import json
 import torch
-from torch.utils.data import DataLoader
 import evaluate
-from tqdm import tqdm
 from transformers import PegasusTokenizer, PegasusForConditionalGeneration
+from tqdm import tqdm
 
-print("Evaluating model...")
-# Subset the dataset for quick evaluation
-tokenizer = PegasusTokenizer.from_pretrained("google/pegasus-xsum")
-model = PegasusForConditionalGeneration.from_pretrained("pegasus_finetuned")
-eval_samples = tokenized_dataset.select(range(100))  # You can increase this if you want
+# Load model and tokenizer
+# model_dir = "./pegasus_finetuned"
+model_dir = "google/pegasus-xsum"
+model = PegasusForConditionalGeneration.from_pretrained(model_dir)
+tokenizer = PegasusTokenizer.from_pretrained(model_dir)
 
-# Evaluate Perplexity
-eval_loader = DataLoader(eval_samples, batch_size=4)
-
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+model = model.to(device)
 model.eval()
-losses = []
-for batch in eval_loader:
-    with torch.no_grad():
-        input_ids = batch["input_ids"].to(model.device)
-        attention_mask = batch["attention_mask"].to(model.device)
-        labels = batch["labels"].to(model.device)
 
-        outputs = model(input_ids=input_ids, attention_mask=attention_mask, labels=labels)
-        loss = outputs.loss
-        losses.append(loss.item())
+# Load test data
+with open("pseudo_summ_dataset.json", "r", encoding="utf-8") as f:
+    raw_data = json.load(f)
 
-avg_loss = np.mean(losses)
-perplexity = math.exp(avg_loss)
-print(f"\nPerplexity: {perplexity:.2f}")
+# Use a subset for evaluation to avoid memory issues
+max_eval = 100
+test_data = raw_data[-max_eval:]
 
-# Prepare for BLEU and ROUGE
+# Initialize metrics
 bleu = evaluate.load("bleu")
 rouge = evaluate.load("rouge")
 
-references = []
-predictions = []
+generated_texts = []
+reference_texts = []
 
-for ex in tqdm(eval_samples, desc="Generating outputs for BLEU/ROUGE"):
-    input_text = ex["input"]
-    target_text = ex["target"]
+# Evaluate
+print(f"Generating summaries for {len(test_data)} examples...")
+for example in tqdm(test_data):
+    input_text = example["input_text"]
+    reference = example["target_text"]
 
-    inputs = tokenizer(input_text, return_tensors="pt").to(model.device)
-    with torch.no_grad():
-        output_ids = model.generate(**inputs, max_length=128, num_return_sequences=1)
-    generated_text = tokenizer.decode(output_ids[0], skip_special_tokens=True)
+    inputs = tokenizer(input_text, return_tensors="pt", truncation=True, max_length=384).to(device)
+    summary_ids = model.generate(
+        **inputs,
+        max_length=96,
+        num_beams=4,
+        length_penalty=2.0,
+        early_stopping=True
+    )
+    summary = tokenizer.decode(summary_ids[0], skip_special_tokens=True)
 
-    predictions.append(generated_text)
-    references.append(target_text)
+    # Store results
+    generated_texts.append(summary)
+    reference_texts.append(reference)
 
-# BLEU
-bleu_result = bleu.compute(predictions=[p.split() for p in predictions],
-                           references=[[r.split()] for r in references])
-print(f"BLEU Score: {bleu_result['bleu']:.4f}")
+# Prepare BLEU format
+# bleu_input = [{"translation": gen, "reference": ref} for gen, ref in zip(generated_texts, reference_texts)]
+bleu_references = [[ex] for ex in reference_texts]
+bleu_predictions = generated_texts
 
-# ROUGE
-rouge_result = rouge.compute(predictions=predictions, references=references)
-print(f"ROUGE-L: {rouge_result['rougeL']:.4f}")
+# Compute metrics
+rouge_result = rouge.compute(predictions=generated_texts, references=reference_texts, use_stemmer=True)
+bleu_result = bleu.compute(predictions=bleu_predictions, references=bleu_references)
+
+# Print results
+print("\n=== Evaluation Results ===")
+for key in rouge_result:
+    print(f"{key}: {rouge_result[key]:.4f}")
+print(f"BLEU: {bleu_result['bleu']:.4f}")
