@@ -13,10 +13,12 @@ for df in pd.read_json('../data_set/yelp_academic_dataset_business.json', lines=
     dfs.append(df)
 df_business = pd.concat(dfs, ignore_index=True)
 
-def get_df(df_reviews, df_restaurants, nb_reviews_per_restaurant, length_max = 10000):
+def get_df(df_reviews, df_restaurants, nb_reviews_per_restaurant, length_max = 10000, nb_restaurants = 52000):
     # Filter to only restaurants with >0 stars and category "Restaurants"
     df_restaurants = df_restaurants[df_restaurants['stars'] > 0]
     df_resto = df_restaurants[df_restaurants['categories'].str.contains('Restaurants', na=False)]
+    df_resto = df_resto.sort_values(by='review_count', ascending=False)
+    df_resto = df_resto.head(nb_restaurants)
 
     # Filter reviews for restaurants and "useful" > 2
     df_reviews_restaurants = df_reviews[df_reviews['business_id'].isin(df_resto['business_id'])]
@@ -58,5 +60,5 @@ def get_df(df_reviews, df_restaurants, nb_reviews_per_restaurant, length_max = 1
 
     return df_final
 
-df = get_df(df_review, df_business, 20, 500)
-df.to_pickle('../data_set/reviews2.pkl')
+df = get_df(df_review, df_business, 50, 150, 50)
+df.to_pickle('../data_set/reviews_50.pkl')

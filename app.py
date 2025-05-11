@@ -10,9 +10,10 @@ import numpy as np
 from datetime import datetime
 import os
 
-from text_gen.transformer.Qwen_prompting import QwenReviewGenerator
+# from text_gen.transformer.Qwen_prompting import QwenReviewGenerator
 # from text_gen.transformer.Custom_prompting import CustomReviewGenerator
 # from text_gen.transformer.Pegasus_prompting import PegasusReviewGenerator
+from text_gen.transformer.Gpt2_inferring import GPT2ReviewGenerator
 
 # Set page configuration
 st.set_page_config(
@@ -71,11 +72,13 @@ st.title("Yelp Reviews Analysis Interface")
 
 # Function to load and cache the model
 @st.cache_resource
-def load_models():
+def load_generative_models():
     """
     Load the Qwen review generator model
     """
-    return None
+    gpt2 = GPT2ReviewGenerator("text_gen/transformer/gpt2_review_finetuned_200")
+
+    return gpt2
 
 # Function to load business data
 @st.cache_data
@@ -85,11 +88,39 @@ def load_business_data(file_path="data_set/yelp_academic_dataset_business.json")
     """
     # For demo purposes, return mock data
     # In production, replace with actual file loading:
+    ids = ['ytynqOUb3hjKeJfRj5Tshw','xlMQBBt9wrtahdqiRDcVSg',
+ 'GBTPC53ZrG1ZBY3DT8Mbcw', '6a4gLLFSgr-Q6CZXDLzBGQ',
+ 'j-qtdD55OLfSqfsWuQTDJg', 'PP3BBaVxZLcJU54uP_wL6Q',
+ 'IkY2ticzHEn4QFn8hQLSWg', 'iSRTaT9WngzB8JJ2YKJUig',
+ '_C7QiQQc47AOEv4PE3Kong', 'ac1AeYqs8Z4_e2X5M3if2A',
+ 'sTPueJEwcRDj7ZJmG7okYA', 'RQAF6a0akMiot5lZZnMNNw',
+ '1b5mnK8bMnnju_cvU65GqQ', '8pqdJjefYq-a9IBSJJmKwA',
+ 'mhrW9O0O5hXGXGnEYBVoag', 'skY6r8WAkYqpV7_TxNm23w',
+ '9PZxjhTIU7OgPIzuGi89Ew', '0RuvlgTnKFbX3IK0ZOOocA',
+ 'VAeEXLbEcI9Emt9KGYq9aA', 'oBNrLz4EDhiscSlbOl8uAw',
+ 'SZU9c8V2GuREDN5KgyHFJw', '6ajnOk0GcY9xbb5Ocaw8Gw',
+ 'U3grYFIeu6RgAAQgdriHww', 'GXFMD0Z4jEVZBCsbPf4CTQ',
+ 'OWOOc0YjU_kioLeEgo5VCA', 'VQcCL9PiNL_wkGf-uF3fjg',
+ 'DcBLYSvOuWcNReolRVr12A', 'XnQ84ylyAZwh-XfHGGNBbQ',
+ 'J0joPXxmN-_9Lzafspqdbw', 'gTC8IQ_i8zXytWSly3Ttvg',
+ '3YqUe2FTCQr0pPVK8oCv6Q', 'AGlh4ZDv6jnoiYfz7At9mw',
+ 'ww3YJXu5c18aGZXWmm00qg', 'Y2Pfil51rNvTd_lFHwzb_g',
+ 'dsfRniRgfbDjC8os848B6A', 'C9K3579SJgLPp0oAOM29wg',
+ '_ab50qdWOk0DdB6XOrBitw', 'yPSejq3_erxo9zdVYTBnZA',
+ 'L5LLN0RafiV1Z9cddzvuCw', 'EagkHaaC-kUozD3MPzbRIw',
+ 'RLlOK2fL6xU1sfIPiP2QBw', 'VaO-VW3e1kARkU9bP1E7Fw',
+ 'ChlcxTEoWBQJXJ2Xb2vm5g', 'VVH6k9-ycttH3TV_lk5WfQ']
     with open(file_path, 'r') as f:
         businesses = []
         for line in f:
             businesses.append(json.loads(line))
-        return businesses
+        
+        # Return only lines with business ids in the list ids
+        res = []
+        for business in businesses:
+            if business["business_id"] in ids:
+                res.append(business)
+        return res
     
     # Mock data for demonstration
     # return [
@@ -120,7 +151,7 @@ def render_star_rating(score):
     return f'<span class="star-rating">{stars_html}</span> <span>{score:.1f}</span>'
 
 # Function to generate a review
-def generate_review(business, model_type):
+def generate_review(business, model_type, nb_stars):
     """
     Generate a review based on the business and model type
     This is a placeholder - replace with actual model integration
@@ -132,8 +163,8 @@ def generate_review(business, model_type):
     business_name = business["name"]
     # business_type = business["categories"].split(",")[0].strip()
     
-    #review = model_type.gen_review(business_name)
-    review = f"This is a generated review for {business_name}. The service was excellent and the food was delicious!"  # Simulate generated review
+    review = model_type.gen_review(business_name, nb_stars)
+    #review = f"This is a generated review for {business_name}. The service was excellent and the food was delicious!"  # Simulate generated review
     sentiment_score = random.uniform(1.0, 5.0)  # Simulate sentiment score
     
     return review, sentiment_score
@@ -191,7 +222,10 @@ def generate_classification_dataset(min_rating, reviews_per_restaurant):
         dfs.append(df)
     df_reviews = pd.concat(dfs, ignore_index=True)
 
-    df_restaurants = st.session_state.businesses
+    dfs = []
+    for df in pd.read_json('../data_set/yelp_academic_dataset_business.json', lines=True, chunksize=chunksize):
+        dfs.append(df)
+    df_restaurants = pd.concat(dfs, ignore_index=True)
 
     df_resto = df_restaurants[df_restaurants['categories'].str.contains('Restaurants', na=False)]
     df_reviews_restaurants = df_reviews[df_reviews['business_id'].isin(df_resto['business_id'])]
@@ -250,7 +284,10 @@ def generate_generative_dataset(reviews_per_restaurant, length_max = 100, nb_res
         dfs.append(df)
     df_reviews = pd.concat(dfs, ignore_index=True)
 
-    df_restaurants = st.session_state.businesses
+    dfs = []
+    for df in pd.read_json('../data_set/yelp_academic_dataset_business.json', lines=True, chunksize=chunksize):
+        dfs.append(df)
+    df_restaurants = pd.concat(dfs, ignore_index=True)
 
     df_restaurants = df_restaurants[df_restaurants['stars'] > 0]
     df_resto = df_restaurants[df_restaurants['categories'].str.contains('Restaurants', na=False)]
@@ -314,9 +351,12 @@ def main():
         st.session_state.generated_review = ""
     if 'sentiment_score' not in st.session_state:
         st.session_state.sentiment_score = 0
-    if 'models' not in st.session_state:
-        qwen_model = load_models()
-        st.session_state.models = {"qwen": qwen_model}
+    # if 'classidication_models' not in st.session_state:
+    #     qwen_model = load_classification_models()
+    #     st.session_state.classification_models = {"qwen": qwen_model}
+    if 'generative_models' not in st.session_state:
+        gpt2_model = load_generative_models()
+        st.session_state.generative_models = {"gpt2": gpt2_model}
     # New session state variables
     if 'classification_filename' not in st.session_state:
         st.session_state.classification_filename = "data_set/reviews.pkl"
@@ -355,12 +395,10 @@ def main():
         # Model selection
         st.subheader("Review Generation")
         model_options = {
-            # "default": "Default Review Generator",
-            # "positive": "Positive Biased Generator",
-            # "critical": "Critical Review Generator"
-            "qwen": "Qwen Transformer Generator",
-            "pegasus": "Pegasus Transformer Generator",
-            "custom": "Custom Transformer Generator"
+            # "qwen": "Qwen Transformer Generator",
+            # "pegasus": "Pegasus Transformer Generator",
+            # "custom": "Custom Transformer Generator"
+            "gpt2": "GPT-2 Transformer Generator"
         }
         selected_model = st.selectbox(
             "Select Review Model",
@@ -438,7 +476,7 @@ def main():
 
             # Generate review if button was clicked
             if generate_button or (st.session_state.generated_review == "" and selected_business):
-                review, score = generate_review(selected_business, st.session_state.models[selected_model])
+                review, score = generate_review(selected_business, st.session_state.generative_models[selected_model], selected_business['stars'])
                 st.session_state.generated_review = review
                 st.session_state.sentiment_score = score
 
