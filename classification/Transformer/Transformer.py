@@ -84,7 +84,7 @@ class ClassificationTransformer:
 
         return model_path
 
-    def predict_sentiment(self, text):
+    def predict_stars(self, text):
         device = next(self.model.parameters()).device
         inputs = self.tokenizer(text, return_tensors="pt", padding=True, truncation=True, max_length=128)
         inputs = {k: v.to(device) for k, v in inputs.items()}

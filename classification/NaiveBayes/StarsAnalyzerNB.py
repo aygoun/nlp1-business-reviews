@@ -192,8 +192,10 @@ class SentimentAnalyzerNB:
                     "confidence": confidence,
                 }
             )
-
-        return results
+        
+        print("ARMANDDDDDD")
+        print(results[0]["predicted_stars"])
+        return results[0]["predicted_stars"]
 
     def init(self):
         # Check if model already exists
@@ -209,33 +211,33 @@ class SentimentAnalyzerNB:
             # Train and evaluate the model
             self.train_model(prepared_df)
 
-    def predict_stars(self, reviews):
-        """Predict star ratings for new reviews"""
-        if isinstance(reviews, str):
-            reviews = [reviews]
+    # def predict_stars(self, reviews):
+    #     """Predict star ratings for new reviews"""
+    #     if isinstance(reviews, str):
+    #         reviews = [reviews]
 
-        # Preprocess the reviews
-        preprocessed_reviews = [
-            " ".join(self.tokenizer.get_tokens(review)) for review in reviews
-        ]
+    #     # Preprocess the reviews
+    #     preprocessed_reviews = [
+    #         " ".join(self.tokenizer.get_tokens(review)) for review in reviews
+    #     ]
 
-        # Make predictions
-        predictions = self.model.predict(preprocessed_reviews)
-        probabilities = self.model.predict_proba(preprocessed_reviews)
+    #     # Make predictions
+    #     predictions = self.model.predict(preprocessed_reviews)
+    #     probabilities = self.model.predict_proba(preprocessed_reviews)
 
-        results = []
-        for i, review in enumerate(reviews):
-            predicted_stars = predictions[i]
-            confidence = probabilities[i][predicted_stars - 1]
-            results.append(
-                {
-                    "review": review,
-                    "predicted_stars": predicted_stars,
-                    "confidence": confidence,
-                }
-            )
+    #     results = []
+    #     for i, review in enumerate(reviews):
+    #         predicted_stars = predictions[i]
+    #         confidence = probabilities[i][predicted_stars - 1]
+    #         results.append(
+    #             {
+    #                 "review": review,
+    #                 "predicted_stars": predicted_stars,
+    #                 "confidence": confidence,
+    #             }
+    #         )
 
-        return results
+    #     return results
 
 
 # Example usage

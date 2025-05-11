@@ -13,6 +13,9 @@ import os
 # from text_gen.transformer.Qwen_prompting import QwenReviewGenerator
 # from text_gen.transformer.Custom_prompting import CustomReviewGenerator
 # from text_gen.transformer.Pegasus_prompting import PegasusReviewGenerator
+from classification.NaiveBayes.StarsAnalyzerNB import SentimentAnalyzerNB
+from classification.Transformer.Transformer import ClassificationTransformer
+
 from text_gen.transformer.Gpt2_inferring import GPT2ReviewGenerator
 
 # Set page configuration
@@ -79,6 +82,18 @@ def load_generative_models():
     gpt2 = GPT2ReviewGenerator("text_gen/transformer/gpt2_review_finetuned_200")
 
     return gpt2
+
+@st.cache_resource
+def load_classification_models():
+    """
+    Load the Qwen review generator model
+    """
+    bayes = SentimentAnalyzerNB("")
+    bayes.init()
+    transformer = ClassificationTransformer("models/Classification_Transformer")
+
+
+    return bayes, transformer
 
 # Function to load business data
 @st.cache_data
@@ -164,10 +179,11 @@ def generate_review(business, model_type, nb_stars):
     # business_type = business["categories"].split(",")[0].strip()
     
     review = model_type.gen_review(business_name, nb_stars)
-    #review = f"This is a generated review for {business_name}. The service was excellent and the food was delicious!"  # Simulate generated review
-    sentiment_score = random.uniform(1.0, 5.0)  # Simulate sentiment score
+    # review = f"This is a generated review for {business_name}. The service was excellent and the food was delicious!"  # Simulate generated review
+    # sentiment_score = random.uniform(1.0, 5.0)  # Simulate sentiment score
+    sentiment_score = st.session_state.class_model.predict_stars(review)
     
-    return review, sentiment_score
+    return review, float(sentiment_score)
 
 # Function to analyze sentiment
 def analyze_sentiment(review, model_type):
@@ -177,25 +193,10 @@ def analyze_sentiment(review, model_type):
     """
     # Simulate processing time
     with st.spinner("Analyzing sentiment..."):
-        time.sleep(0.8)  # Simulate processing time
+        time.sleep(0.5)  # Simulate processing time
     
     # For demo purposes, return slightly different results based on model
-    if model_type == "advanced":
-        # More nuanced scores
-        if "loved" in review.lower() or "excellent" in review.lower():
-            return 4.9
-        elif "disappointing" in review.lower() or "mediocre" in review.lower():
-            return 2.1
-        else:
-            return 3.7
-    else:  # basic
-        # More rounded scores
-        if "loved" in review.lower() or "excellent" in review.lower():
-            return 5.0
-        elif "disappointing" in review.lower() or "mediocre" in review.lower():
-            return 2.0
-        else:
-            return 3.5
+    return st.session_state.class_model.predict_stars(st.session_state.generated_review)
 
 # Function to get sentiment description
 def get_sentiment_description(score):
@@ -343,20 +344,20 @@ def main():
     # Initialize session state if not present
     if 'businesses' not in st.session_state:
         st.session_state.businesses = load_business_data()
-    # if 'classification_dataset' not in st.session_state:
-    #     st.session_state.classification_dataset = pd.read_pickle("data_set/reviews.pkl")
-    # if 'generative_dataset' not in st.session_state:
-    #     st.session_state.generative_dataset = pd.read_pickle("data_set/reviews2.pkl")
     if 'generated_review' not in st.session_state:
         st.session_state.generated_review = ""
     if 'sentiment_score' not in st.session_state:
         st.session_state.sentiment_score = 0
-    # if 'classidication_models' not in st.session_state:
-    #     qwen_model = load_classification_models()
-    #     st.session_state.classification_models = {"qwen": qwen_model}
+    if 'classidication_models' not in st.session_state:
+        bayes, transformer_model = load_classification_models()
+        st.session_state.classification_models = {"transformer": transformer_model, "bayes": bayes}
+    if 'class_model' not in st.session_state:
+        st.session_state.class_model = st.session_state.classification_models["transformer"]
     if 'generative_models' not in st.session_state:
         gpt2_model = load_generative_models()
         st.session_state.generative_models = {"gpt2": gpt2_model}
+    if 'gen_model' not in st.session_state:
+        st.session_state.gen_model = st.session_state.generative_models["gpt2"]
     # New session state variables
     if 'classification_filename' not in st.session_state:
         st.session_state.classification_filename = "data_set/reviews.pkl"
@@ -414,8 +415,10 @@ def main():
         # Sentiment analysis model selection
         st.subheader("Sentiment Analysis")
         sentiment_model_options = {
-            "basic": "Basic Sentiment Analysis",
-            "advanced": "Advanced Sentiment Analysis"
+            # "basic": "Basic Sentiment Analysis",
+            # "advanced": "Advanced Sentiment Analysis"
+            "bayes": "Naive Bayes Sentiment Analysis",
+            "transformer": "Transformer Sentiment Analysis",
         }
         selected_sentiment_model = st.selectbox(
             "Select Sentiment Model",
@@ -476,6 +479,8 @@ def main():
 
             # Generate review if button was clicked
             if generate_button or (st.session_state.generated_review == "" and selected_business):
+                st.session_state.class_model = st.session_state.classification_models[selected_sentiment_model]
+                st.session_state.gen_model = st.session_state.generative_models[selected_model]
                 review, score = generate_review(selected_business, st.session_state.generative_models[selected_model], selected_business['stars'])
                 st.session_state.generated_review = review
                 st.session_state.sentiment_score = score
@@ -491,6 +496,8 @@ def main():
 
                 # Re-analyze sentiment if button was clicked
                 if analyze_button:
+                    st.session_state.class_model = st.session_state.classification_models[selected_sentiment_model]
+                    print(st.session_state.class_model)
                     st.session_state.sentiment_score = analyze_sentiment(
                         st.session_state.generated_review, 
                         selected_sentiment_model
