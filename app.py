@@ -7,10 +7,12 @@ from PIL import Image
 import io
 import base64
 import numpy as np
+from datetime import datetime
+import os
 
 from text_gen.transformer.Qwen_prompting import QwenReviewGenerator
-from text_gen.transformer.Custom_prompting import CustomReviewGenerator
-from text_gen.transformer.Pegasus_prompting import PegasusReviewGenerator
+# from text_gen.transformer.Custom_prompting import CustomReviewGenerator
+# from text_gen.transformer.Pegasus_prompting import PegasusReviewGenerator
 
 # Set page configuration
 st.set_page_config(
@@ -73,8 +75,7 @@ def load_models():
     """
     Load the Qwen review generator model
     """
-    return QwenReviewGenerator(data_path="data_set/reviews2.pkl"), CustomReviewGenerator(data_path="data_set/reviews2.pkl", model_path="text_gen/transformer/pegasus_finetuned"), PegasusReviewGenerator(data_path="data_set/reviews2.pkl")
-
+    return None
 
 # Function to load business data
 @st.cache_data
@@ -131,7 +132,8 @@ def generate_review(business, model_type):
     business_name = business["name"]
     # business_type = business["categories"].split(",")[0].strip()
     
-    review = model_type.gen_review(business_name)
+    #review = model_type.gen_review(business_name)
+    review = f"This is a generated review for {business_name}. The service was excellent and the food was delicious!"  # Simulate generated review
     sentiment_score = random.uniform(1.0, 5.0)  # Simulate sentiment score
     
     return review, sentiment_score
@@ -177,22 +179,153 @@ def get_sentiment_description(score):
     else:
         return "Very Negative"
 
+# Function to generate dataset for classification models
+def generate_classification_dataset(min_rating, reviews_per_restaurant):
+    """
+    Generate a dataset for classification models
+    [...]
+    """
+    chunksize = 1000
+    dfs = []
+    for df in pd.read_json('../data_set/yelp_academic_dataset_review.json', lines=True, chunksize=chunksize):
+        dfs.append(df)
+    df_reviews = pd.concat(dfs, ignore_index=True)
+
+    df_restaurants = st.session_state.businesses
+
+    df_resto = df_restaurants[df_restaurants['categories'].str.contains('Restaurants', na=False)]
+    df_reviews_restaurants = df_reviews[df_reviews['business_id'].isin(df_resto['business_id'])]
+    df_review_filtered = df_reviews_restaurants.groupby('business_id').agg(
+        average_rating=('stars', 'mean'),
+        rating_count=('stars', 'count'),
+        median_rating=('stars', 'median')
+    ).reset_index()
+    df_sup_t = df_review_filtered[df_review_filtered['rating_count'] > min_rating]
+    dfs = []
+    nb_reviews = 0
+    for i in range(1,6):
+        temp = df_sup_t[(df_sup_t['median_rating'] == i) & (df_sup_t['average_rating'] >= i - 0.5) & (df_sup_t['average_rating'] <= i + 0.5)]
+        temp = temp.head(reviews_per_restaurant // 5)
+        nb_reviews += temp['rating_count'].sum()
+        dfs.append(temp)
+    df_sup_t = pd.concat(dfs)
+
+    df_low_t = df_review_filtered[df_review_filtered['rating_count'] <= min_rating]
+    dfs = []
+    for i in range(1,6):
+        offset = 10
+        target = nb_reviews // (5 - i + 1)
+        temp = df_low_t[(df_low_t['median_rating'] == i) & (df_low_t['average_rating'] >= i - 0.5) & (df_low_t['average_rating'] <= i + 0.5)]
+        res = temp.head(reviews_per_restaurant // 5 + offset)
+        while target > res['rating_count'].sum() and res.shape[0] < reviews_per_restaurant // 5 + offset:
+            print("in iteration:", i)
+            print("actual count:", res['rating_count'].sum())
+            print("actual target:", target)
+            offset += 10
+            res = temp.head(reviews_per_restaurant // 5 + offset)
+        nb_reviews -= res['rating_count'].sum()
+        dfs.append(temp)
+    df_low_t = pd.concat(dfs)
+
+    df_res = pd.concat([df_sup_t, df_low_t])
+    df = df_reviews_restaurants[df_reviews_restaurants['business_id'].isin(df_res['business_id'])]
+   
+    # Creates and saves a CSV file with timestamp
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    filename = f"data_set/classification_dataset_{timestamp}.pkl"
+    df.to_pickle(filename, index=False)
+    
+    return df, filename
+
+# Function to generate dataset for generative models
+def generate_generative_dataset(reviews_per_restaurant, length_max = 100, nb_restaurants = 52000):
+    """
+    Generate a dataset for generative models
+    [...]
+    """
+
+    chunksize = 1000
+    dfs = []
+    for df in pd.read_json('../data_set/yelp_academic_dataset_review.json', lines=True, chunksize=chunksize):
+        dfs.append(df)
+    df_reviews = pd.concat(dfs, ignore_index=True)
+
+    df_restaurants = st.session_state.businesses
+
+    df_restaurants = df_restaurants[df_restaurants['stars'] > 0]
+    df_resto = df_restaurants[df_restaurants['categories'].str.contains('Restaurants', na=False)]
+    df_resto = df_resto.sort_values(by='review_count', ascending=False)
+    df_resto = df_resto.head(nb_restaurants)
+
+    # Filter reviews for restaurants and "useful" > 2
+    df_reviews_restaurants = df_reviews[df_reviews['business_id'].isin(df_resto['business_id'])]
+    df_reviews_interesting = df_reviews_restaurants[df_reviews_restaurants['useful'] > 2]
+    df_reviews_interesting = df_reviews_interesting[df_reviews_interesting['text'].str.len() < length_max]
+
+    # Compute total review counts and star-specific ratios
+    total_counts = df_reviews_restaurants.groupby('business_id')['stars'].count().rename('rating_count')
+    star_counts = df_reviews_restaurants.groupby(['business_id', 'stars']).size().unstack(fill_value=0)
+
+    # Calculate ratios
+    ratios = star_counts.div(total_counts, axis=0).fillna(0)
+    ratios.columns = [f'ratio_{col}_stars' for col in ratios.columns]
+    df_restaurents_stat = ratios.reset_index()
+    
+    # Merge ratios into interesting reviews
+    df_reviews_interesting = df_reviews_interesting.merge(df_restaurents_stat, on='business_id', how='inner')
+
+    # Compute for each row how many reviews to keep
+    def calculate_keep_count(row):
+        ratio = row[f'ratio_{int(row.stars)}_stars']
+        return int(reviews_per_restaurant * ratio)
+
+    df_reviews_interesting['keep_count'] = df_reviews_interesting.apply(calculate_keep_count, axis=1)
+
+    # Sort reviews by date within business_id and stars
+    df_reviews_interesting.sort_values(['business_id', 'stars','useful', 'date'], ascending=[True, True, False, False], inplace=True)
+
+    # Assign rank within each (business_id, stars) group
+    df_reviews_interesting['rank'] = df_reviews_interesting.groupby(['business_id', 'stars']).cumcount()
+
+    # Keep only top N reviews per group
+    df_final = df_reviews_interesting[df_reviews_interesting['rank'] < df_reviews_interesting['keep_count']]
+    df_final = df_final.drop_duplicates(subset='review_id').reset_index(drop=True)
+    df_final = df_final.drop(columns=['keep_count', 'rank', 'ratio_1_stars', 'ratio_2_stars', 'ratio_3_stars', 'ratio_4_stars', 'ratio_5_stars', 'cool', 'funny', 'user_id'])
+
+    df_final = df_final.merge(df_resto[['business_id', 'name']], on='business_id', how='inner')
+    df_final = df_final.rename(columns={'name': 'restaurant_name'})
+
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    filename = f"data_set/generative_dataset_{timestamp}.pkl"
+    df_final.to_pickle(filename, index=False)
+    
+    return df_final, filename
+
 # Main application
 def main():
-    # Initilize models
-    qwen_model, custom_model, pegasus_model = load_models()
-    models = {"qwen": qwen_model, "custom": custom_model, "pegasus": pegasus_model}
     # Initialize session state if not present
     if 'businesses' not in st.session_state:
         st.session_state.businesses = load_business_data()
+    # if 'classification_dataset' not in st.session_state:
+    #     st.session_state.classification_dataset = pd.read_pickle("data_set/reviews.pkl")
+    # if 'generative_dataset' not in st.session_state:
+    #     st.session_state.generative_dataset = pd.read_pickle("data_set/reviews2.pkl")
     if 'generated_review' not in st.session_state:
         st.session_state.generated_review = ""
     if 'sentiment_score' not in st.session_state:
         st.session_state.sentiment_score = 0
+    if 'models' not in st.session_state:
+        qwen_model = load_models()
+        st.session_state.models = {"qwen": qwen_model}
+    # New session state variables
+    if 'classification_filename' not in st.session_state:
+        st.session_state.classification_filename = "data_set/reviews.pkl"
+    if 'generative_filename' not in st.session_state:
+        st.session_state.generative_filename = "data_set/reviews2.pkl"
     
     # Sidebar for controls
     with st.sidebar:
-        # st.header("Controls")
+        st.header("Controls")
         
         # File uploader for custom data (not functional in this demo)
         # uploaded_file = st.file_uploader("Upload Yelp business JSON (optional)", type=["json"])
@@ -254,75 +387,158 @@ def main():
         )
         
         analyze_button = st.button("Re-analyze Sentiment", use_container_width=True)
+
+        st.divider()
+
+        # Dataset Generation section
+        st.subheader("Dataset Generation")
+
+        # Classification dataset parameters
+        st.markdown("### Classification Dataset")
+        min_rating = st.slider("Minimum Rating", min_value=20, max_value=2000, value=500, step=1)
+        class_reviews_per_restaurant = st.number_input("Reviews per Restaurant (Classification)", 
+                                                   min_value=1, max_value=2000, value=10)
+
+        # Button to generate classification dataset
+        if st.button("Generate Classification Dataset", use_container_width=True):
+            dataset, filename = generate_classification_dataset(min_rating, class_reviews_per_restaurant)
+            st.session_state.classification_filename = filename
+            st.success(f"Classification dataset generated and saved as {filename}")
+
+        # Generative dataset parameters
+        st.markdown("### Generative Dataset")
+        gen_reviews_per_restaurant = st.number_input("Reviews per Restaurant (Generative)", 
+                                                min_value=1, max_value=500, value=50)
+        gen_reviews_max_len = st.number_input("Maximum Length of Reviews",
+                                             min_value=1, max_value=1000, value=100)
+        nb_restaurant = st.number_input("Number of Restaurant",
+                                             min_value=1, max_value=52000, value=20000)
+
+        # Button to generate generative dataset
+        if st.button("Generate Generative Dataset", use_container_width=True):
+            dataset, filename = generate_generative_dataset(gen_reviews_per_restaurant, gen_reviews_max_len, nb_restaurant)
+            st.session_state.generative_filename = filename
+            st.success(f"Generative dataset generated and saved as {filename}")
     
-    # Main content area
-    if selected_business:
-        # Business information card
-        st.markdown("<h2>Business Information</h2>", unsafe_allow_html=True)
-        st.markdown(f"""
-        <div class="business-card">
-            <h3>{selected_business["name"]}</h3>
-            <p>{selected_business["address"]}, {selected_business["city"]}, {selected_business["state"]} {selected_business["postal_code"]}</p>
-            <p><strong>Categories:</strong> {selected_business["categories"]}</p>
-            <p><strong>Actual Yelp Rating:</strong> {render_star_rating(selected_business["stars"])} ({selected_business["review_count"]} reviews)</p>
-        </div>
-        """, unsafe_allow_html=True)
-        
-        # Generate review if button was clicked
-        if generate_button or (st.session_state.generated_review == "" and selected_business):
-            review, score = generate_review(selected_business, models[selected_model])
-            st.session_state.generated_review = review
-            st.session_state.sentiment_score = score
-        
-        # Display generated review
-        if st.session_state.generated_review:
-            st.markdown("<h2>Generated Review</h2>", unsafe_allow_html=True)
+    tab1, tab2 = st.tabs(["Review Generation & Analysis", "Dataset Generation"])
+
+    with tab1:
+        # Main content area
+        if selected_business:
+            # Business information card
+            st.markdown("<h2>Business Information</h2>", unsafe_allow_html=True)
             st.markdown(f"""
-            <div class="review-card">
-                {st.session_state.generated_review}
+            <div class="business-card">
+                <h3>{selected_business["name"]}</h3>
+                <p>{selected_business["address"]}, {selected_business["city"]}, {selected_business["state"]} {selected_business["postal_code"]}</p>
+                <p><strong>Categories:</strong> {selected_business["categories"]}</p>
+                <p><strong>Actual Yelp Rating:</strong> {render_star_rating(selected_business["stars"])} ({selected_business["review_count"]} reviews)</p>
             </div>
             """, unsafe_allow_html=True)
-            
-            # Re-analyze sentiment if button was clicked
-            if analyze_button:
-                st.session_state.sentiment_score = analyze_sentiment(
-                    st.session_state.generated_review, 
-                    selected_sentiment_model
-                )
-            
-            # Display sentiment analysis
-            st.markdown("<h2>Sentiment Analysis</h2>", unsafe_allow_html=True)
-            sentiment_description = get_sentiment_description(st.session_state.sentiment_score)
-            st.markdown(f"""
-            <div class="sentiment-card">
-                <p><strong>Sentiment Score:</strong> {render_star_rating(st.session_state.sentiment_score)}</p>
-                <p><strong>Sentiment:</strong> {sentiment_description}</p>
-            </div>
-            """, unsafe_allow_html=True)
-            
-            # Rating comparison
-            st.markdown("<h2>Rating Comparison</h2>", unsafe_allow_html=True)
-            col1, col2 = st.columns(2)
-            with col1:
+
+            # Generate review if button was clicked
+            if generate_button or (st.session_state.generated_review == "" and selected_business):
+                review, score = generate_review(selected_business, st.session_state.models[selected_model])
+                st.session_state.generated_review = review
+                st.session_state.sentiment_score = score
+
+            # Display generated review
+            if st.session_state.generated_review:
+                st.markdown("<h2>Generated Review</h2>", unsafe_allow_html=True)
                 st.markdown(f"""
-                <div class="comparison-card">
-                    <div>
-                        <p><strong>Actual Yelp Rating:</strong></p>
-                        <p>{render_star_rating(selected_business["stars"])}</p>
-                    </div>
+                <div class="review-card">
+                    {st.session_state.generated_review}
                 </div>
                 """, unsafe_allow_html=True)
-            with col2:
+
+                # Re-analyze sentiment if button was clicked
+                if analyze_button:
+                    st.session_state.sentiment_score = analyze_sentiment(
+                        st.session_state.generated_review, 
+                        selected_sentiment_model
+                    )
+
+                # Display sentiment analysis
+                st.markdown("<h2>Sentiment Analysis</h2>", unsafe_allow_html=True)
+                sentiment_description = get_sentiment_description(st.session_state.sentiment_score)
                 st.markdown(f"""
-                <div class="comparison-card">
-                    <div>
-                        <p><strong>Generated Review Rating:</strong></p>
-                        <p>{render_star_rating(st.session_state.sentiment_score)}</p>
-                    </div>
+                <div class="sentiment-card">
+                    <p><strong>Sentiment Score:</strong> {render_star_rating(st.session_state.sentiment_score)}</p>
+                    <p><strong>Sentiment:</strong> {sentiment_description}</p>
                 </div>
                 """, unsafe_allow_html=True)
-    else:
-        st.info("Please select a business from the sidebar to begin.")
+
+                # Rating comparison
+                st.markdown("<h2>Rating Comparison</h2>", unsafe_allow_html=True)
+                col1, col2 = st.columns(2)
+                with col1:
+                    st.markdown(f"""
+                    <div class="comparison-card">
+                        <div>
+                            <p><strong>Actual Yelp Rating:</strong></p>
+                            <p>{render_star_rating(selected_business["stars"])}</p>
+                        </div>
+                    </div>
+                    """, unsafe_allow_html=True)
+                with col2:
+                    st.markdown(f"""
+                    <div class="comparison-card">
+                        <div>
+                            <p><strong>Generated Review Rating:</strong></p>
+                            <p>{render_star_rating(st.session_state.sentiment_score)}</p>
+                        </div>
+                    </div>
+                    """, unsafe_allow_html=True)
+        else:
+            st.info("Please select a business from the sidebar to begin.")
+    
+    with tab2:
+        st.markdown("## Dataset Generation")
+
+        col1, col2 = st.columns(2)
+
+        with col1:
+            st.markdown("### Classification Dataset")
+            # Download button
+            st.info("Generate a classification dataset using the controls in the sidebar.")
+            st.markdown("""
+            This dataset is optimized for classification models with parameters:
+            - Minimum rating threshold
+            - Number of reviews per restaurant
+            """)
+            st.download_button(
+                label="Download Classification Dataset",
+                file_name=st.session_state.classification_filename,
+                data=pd.read_pickle(st.session_state.classification_filename).to_csv(index=False),  # Convert DataFrame to CSV string
+                mime='text/csv',
+            )
+        
+        with col2:
+            st.markdown("### Generative Dataset")
+            st.info("Generate a dataset for generative models using the controls in the sidebar.")
+            st.markdown("""
+            This dataset is optimized for generative models with parameters:
+            - Number of reviews per restaurant
+            - Maximum length of reviews
+            - Number of restaurants
+            """)
+            st.download_button(
+                label="Download Generative Dataset",
+                file_name=st.session_state.generative_filename,
+                data=pd.read_pickle(st.session_state.generative_filename).to_csv(index=False),  # Convert DataFrame to CSV string
+                mime='text/csv',
+            )
+        
+        # Information about integrating with your models
+        st.markdown("## How to Integrate with Your Models")
+        st.markdown("""
+        To integrate these datasets with your existing models:
+        
+        1. Download the generated datasets using the buttons above
+        2. Feed these datasets into your classification and generative models
+        3. Update the `generate_review()` and `analyze_sentiment()` functions in this app to call your actual models
+        
+        """)
     
     # Footer with note about mock data
     st.markdown("---")

@@ -70,7 +70,7 @@ import torch
 import pandas as pd
 
 class QwenReviewGenerator:
-    def __init__(self, model_name="Qwen/Qwen2.5-3B", data_path='../../data_set/reviews2.pkl'):
+    def __init__(self, model_name="Qwen/Qwen2.5-3B", df=None):
         # Model setup
         self.tokenizer = AutoTokenizer.from_pretrained(model_name, trust_remote_code=True)
         self.model = AutoModelForCausalLM.from_pretrained(
@@ -82,7 +82,7 @@ class QwenReviewGenerator:
         self.generator = pipeline("text-generation", model=self.model, tokenizer=self.tokenizer)
 
         # Load the dataset
-        self.df = pd.read_pickle(data_path)
+        self.df = df
 
         # Parameters
         self.MAX_TOKENS = 32000
