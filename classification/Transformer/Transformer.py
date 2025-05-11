@@ -91,19 +91,39 @@ tokenizer.save_pretrained(model_path)
 
 # Exemple d'utilisation
 def predict_sentiment(text):
+    # Get the model's device
+    device = next(model.parameters()).device
+    
+    # Tokenize and move to the same device as the model
     inputs = tokenizer(text, return_tensors="pt", padding=True, truncation=True, max_length=128)
+    inputs = {k: v.to(device) for k, v in inputs.items()}
+    
     with torch.no_grad():
         outputs = model(**inputs)
     
     prediction = torch.argmax(outputs.logits, dim=-1).item()
-    sentiment_map = {0: "Négatif", 1: "Neutre", 2: "Positif"}
-    return sentiment_map[prediction]
+    
+    # Since you're predicting stars (0-4) and want to convert to 1-5 scale
+    star_rating = prediction + 1
+    
+    # Optional: Map stars to sentiment descriptions
+    sentiments = {
+        1: "Très négatif (1 étoile)",
+        2: "Négatif (2 étoiles)",
+        3: "Neutre (3 étoiles)",
+        4: "Positif (4 étoiles)",
+        5: "Très positif (5 étoiles)"
+    }
+    
+    return sentiments[star_rating]
+
 
 # Test avec quelques exemples
 test_reviews = [
-    "Le service était horrible et la nourriture froide.",
-    "Le restaurant était correct, rien d'extraordinaire.",
-    "Une expérience incroyable ! La meilleure nourriture que j'ai jamais goûtée."
+    "The service was terrible and the food was cold.",
+    "The restaurant was okay, nothing extraordinary.",
+    "An incredible experience! The best food I've ever tasted.",
+    "The food was delicious but the staff was mean. I will not come back."
 ]
 
 for review in test_reviews:
