@@ -8,8 +8,11 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from tokenizer.tokenizer import Tokenizer
 import time
+import pickle
+import os
 
-DATA_SET = "./data_set/reviews2.pkl"
+DATA_SET = "./data_set/reviews.pkl"
+MODEL_PATH = "./models/stars_model_nb.pkl"
 
 
 class SentimentAnalyzerNB:
@@ -27,12 +30,7 @@ class SentimentAnalyzerNB:
 
     def load_data(self):
         """Load the review data from JSON file or JSON Lines format"""
-        try:
-            # Try to load as a JSON array
-            df = pd.read_pickle(self.data_path)
-        except:
-            # If that fails, try to load as JSON Lines
-            df = pd.read_json(self.data_path, lines=True)
+        df = pd.read_pickle(self.data_path)
 
         print(f"\nData Loading Summary:")
         print(f"Total reviews loaded: {len(df)}")
@@ -97,6 +95,10 @@ class SentimentAnalyzerNB:
         end_time = time.time()
         print(f"Training completed in {end_time - start_time:.2f} seconds.")
 
+        # Save the model
+        with open(MODEL_PATH, "wb") as f:
+            pickle.dump(self.model, f)
+
         # Print vocabulary size
         vectorizer = self.model.named_steps["tfidf"]
         print(f"Vocabulary size: {len(vectorizer.get_feature_names_out())}")
@@ -127,7 +129,7 @@ class SentimentAnalyzerNB:
         plt.tight_layout()
         plt.savefig("confusion_matrix.png")
 
-        return X_test, y_test, y_pred
+        return
 
     def analyze_feature_importance(self, n_features=20):
         """Analyze the most important features for each star rating"""
@@ -194,12 +196,46 @@ class SentimentAnalyzerNB:
         return results
 
     def init(self):
-        # Load and prepare data
-        df = self.load_data()
-        prepared_df = self.prepare_data(df)
+        # Check if model already exists
+        if os.path.exists(MODEL_PATH):
+            print(f"Loading existing model from {MODEL_PATH}")
+            with open(MODEL_PATH, "rb") as f:
+                self.model = pickle.load(f)
+        else:
+            # Load and prepare data
+            df = self.load_data()
+            prepared_df = self.prepare_data(df)
 
-        # Train and evaluate the model
-        X_test, y_test, y_pred = self.train_model(prepared_df)
+            # Train and evaluate the model
+            self.train_model(prepared_df)
+
+    def predict_stars(self, reviews):
+        """Predict star ratings for new reviews"""
+        if isinstance(reviews, str):
+            reviews = [reviews]
+
+        # Preprocess the reviews
+        preprocessed_reviews = [
+            " ".join(self.tokenizer.get_tokens(review)) for review in reviews
+        ]
+
+        # Make predictions
+        predictions = self.model.predict(preprocessed_reviews)
+        probabilities = self.model.predict_proba(preprocessed_reviews)
+
+        results = []
+        for i, review in enumerate(reviews):
+            predicted_stars = predictions[i]
+            confidence = probabilities[i][predicted_stars - 1]
+            results.append(
+                {
+                    "review": review,
+                    "predicted_stars": predicted_stars,
+                    "confidence": confidence,
+                }
+            )
+
+        return results
 
 
 # Example usage
@@ -210,8 +246,8 @@ if __name__ == "__main__":
     # Load data and train model
     analyzer.init()
 
-    # Analyze feature importance for stats
-    analyzer.analyze_feature_importance()
+    # # Analyze feature importance for stats
+    # analyzer.analyze_feature_importance()
 
     # Example with manual predictions
     test_reviews = [
@@ -298,4 +334,75 @@ Review: The ambiance was nice but the food was just okay.
 -> Predicted Stars: 3 (Confidence: 0.4891)
 Review: Never had a greater dinner in my life. Go !!!
 -> Predicted Stars: 5 (Confidence: 0.5560)
+"""
+
+"""
+DATASET SIZE INCREASED AND PREDICTING STARS - 395K REVIEW PRE-PROCESSED DATASET
+Data Loading Summary:
+Total reviews loaded: 395630
+Columns available: ['review_id', 'user_id', 'business_id', 'stars', 'useful', 'funny', 'cool', 'text', 'date']
+Sample of star ratings distribution:
+stars
+1     70465
+2     39836
+3     51307
+4     89099
+5    144923
+Name: count, dtype: int64
+
+Data Preparation Summary:
+Original text samples: 395630
+Warning: 15 reviews became empty after cleaning
+Final dataset size: 395615 reviews
+
+Star Rating Distribution:
+1 stars: 70460 reviews (17.8%)
+2 stars: 39835 reviews (10.1%)
+3 stars: 51303 reviews (13.0%)
+4 stars: 89096 reviews (22.5%)
+5 stars: 144921 reviews (36.6%)
+
+Training Data Summary:
+Training samples: 316492
+Testing samples: 79123
+
+Training set star distribution:
+stars
+1     56368
+2     31868
+3     41042
+4     71277
+5    115937
+Name: count, dtype: int64
+
+Training model...
+Training completed in 24.14 seconds.
+Vocabulary size: 5000
+
+Model Evaluation:
+Accuracy: 0.6151
+
+Classification Report:
+              precision    recall  f1-score   support
+
+           1       0.68      0.82      0.74     14092
+           2       0.46      0.20      0.28      7967
+           3       0.47      0.25      0.32     10261
+           4       0.47      0.42      0.45     17819
+           5       0.68      0.88      0.77     28984
+
+    accuracy                           0.62     79123
+   macro avg       0.55      0.51      0.51     79123
+weighted avg       0.58      0.62      0.58     79123
+
+
+Example Predictions:
+Review: The food was amazing and the service was excellent!
+-> Predicted Stars: 5 (Confidence: 0.9493)
+Review: Worst experience ever. The staff was rude and the food was cold.
+-> Predicted Stars: 1 (Confidence: 0.9800)
+Review: The ambiance was nice but the food was just okay.
+-> Predicted Stars: 3 (Confidence: 0.4638)
+Review: Never had a greater dinner in my life. Go !!!
+-> Predicted Stars: 5 (Confidence: 0.4159)
 """

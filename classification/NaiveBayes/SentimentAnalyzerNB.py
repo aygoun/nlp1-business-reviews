@@ -1,5 +1,4 @@
 import pandas as pd
-import json
 from sklearn.model_selection import train_test_split
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.naive_bayes import MultinomialNB
@@ -8,8 +7,11 @@ from sklearn.metrics import classification_report, confusion_matrix, accuracy_sc
 import matplotlib.pyplot as plt
 import seaborn as sns
 from tokenizer.tokenizer import Tokenizer
+import pickle
+import os
 
-DATA_SET = "./data_set/yelp_subset_review.json"
+DATA_SET = "./data_set/reviews.pkl"
+MODEL_PATH = "./models/sentiment_model_nb.pkl"
 
 
 class SentimentAnalyzerNB:
@@ -29,15 +31,7 @@ class SentimentAnalyzerNB:
 
     def load_data(self):
         """Load the review data from JSON file or JSON Lines format"""
-        try:
-            # Try to load as a JSON array
-            with open(self.data_path, "r") as f:
-                data = json.load(f)
-                df = pd.DataFrame(data)
-        except:
-            # If that fails, try to load as JSON Lines
-            df = pd.read_json(self.data_path, lines=True)
-
+        df = pd.read_pickle(self.data_path)
         print(f"Loaded {len(df)} reviews")
         return df
 
@@ -71,13 +65,20 @@ class SentimentAnalyzerNB:
         # Create a pipeline with TF-IDF and MultinomialNB
         self.model = Pipeline(
             [
-                ("tfidf", TfidfVectorizer(max_features=5000, ngram_range=(1, 2))),
+                (
+                    "tfidf",
+                    TfidfVectorizer(max_features=5000, ngram_range=(1, 2)),
+                ),
                 ("classifier", MultinomialNB(alpha=0.1)),
             ]
         )
 
         # Train the model
         self.model.fit(X_train, y_train)
+
+        # Save the model
+        with open(MODEL_PATH, "wb") as f:
+            pickle.dump(self.model, f)
 
         # Evaluate the model
         y_pred = self.model.predict(X_test)
@@ -107,7 +108,7 @@ class SentimentAnalyzerNB:
         plt.tight_layout()
         plt.savefig("confusion_matrix.png")
 
-        return X_test, y_test, y_pred
+        return
 
     def analyze_feature_importance(self, n_features=20):
         """Analyze the most important features for each class"""
@@ -188,12 +189,18 @@ class SentimentAnalyzerNB:
         return results
 
     def init(self):
-        # Load and prepare data
-        df = analyzer.load_data()
-        prepared_df = analyzer.prepare_data(df)
-
-        # Train and evaluate the model
-        X_test, y_test, y_pred = analyzer.train_model(prepared_df)
+        # Check if model already exists
+        if os.path.exists(MODEL_PATH):
+            print(f"Loading existing model from {MODEL_PATH}")
+            with open(MODEL_PATH, "rb") as f:
+                self.model = pickle.load(f)
+            return
+        else:
+            # Load and prepare data
+            df = self.load_data()
+            prepared_df = self.prepare_data(df)
+            # Train and evaluate the model
+            self.train_model(prepared_df)
 
 
 # Example usage
@@ -205,7 +212,7 @@ if __name__ == "__main__":
     analyzer.init()
 
     # UTILS: Analyze feature importance for stats
-    analyzer.analyze_feature_importance()
+    # analyzer.analyze_feature_importance()
 
     # Example with manual predictions
     test_reviews = [
@@ -225,6 +232,7 @@ if __name__ == "__main__":
         )
 
 """
+WITH NON PREPROCESSED DATASET
 Model Evaluation:
 Accuracy: 0.8874
 
@@ -248,4 +256,7 @@ Review: The ambiance was nice but the food was just okay.
 -> Sentiment: Negative (Confidence: 0.8075)
 Review: Never add a greater dinner in my life. Go !!!
 -> Sentiment: Positive (Confidence: 0.7062)
+"""
+
+"""
 """
