@@ -5,7 +5,7 @@ import os
 
 
 class CustomReviewGenerator:
-    def __init__(self, data_path='../../data_set/reviews2.pkl', model_path='../../data_set/pegasus_finetuned'):
+    def __init__(self, data_path='../../data_set/reviews_custom.pkl', model_path='../../data_set/pegasus_finetuned'):
         # model_path = os.path.abspath("./pegasus_finetuned")
         self.tokenizer = PegasusTokenizer.from_pretrained(model_path)
         self.model = PegasusForConditionalGeneration.from_pretrained(model_path)
@@ -57,7 +57,7 @@ class CustomReviewGenerator:
 
         return final_summary
     
-    def gen_review(self, restaurant_name):
+    def gen_review(self, restaurant_name, nb_stars):
         summary = self.summarize_reviews(restaurant_name)
         return summary
 

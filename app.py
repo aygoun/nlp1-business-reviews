@@ -11,7 +11,7 @@ from datetime import datetime
 import os
 
 # from text_gen.transformer.Qwen_prompting import QwenReviewGenerator
-# from text_gen.transformer.Custom_prompting import CustomReviewGenerator
+from text_gen.transformer.Custom_prompting import CustomReviewGenerator
 # from text_gen.transformer.Pegasus_prompting import PegasusReviewGenerator
 from classification.NaiveBayes.StarsAnalyzerNB import SentimentAnalyzerNB
 from classification.Transformer.Transformer import ClassificationTransformer
@@ -80,8 +80,9 @@ def load_generative_models():
     Load the Qwen review generator model
     """
     gpt2 = GPT2ReviewGenerator("text_gen/transformer/gpt2_review_finetuned_200")
+    pegasus = CustomReviewGenerator("data_set/reviews_custom.pkl", "text_gen/transformer/pegasus_finetuned")
 
-    return gpt2
+    return gpt2, pegasus
 
 @st.cache_resource
 def load_classification_models():
@@ -354,8 +355,8 @@ def main():
     if 'class_model' not in st.session_state:
         st.session_state.class_model = st.session_state.classification_models["transformer"]
     if 'generative_models' not in st.session_state:
-        gpt2_model = load_generative_models()
-        st.session_state.generative_models = {"gpt2": gpt2_model}
+        gpt2_model, pegasus = load_generative_models()
+        st.session_state.generative_models = {"gpt2": gpt2_model, "pegasus": pegasus}
     if 'gen_model' not in st.session_state:
         st.session_state.gen_model = st.session_state.generative_models["gpt2"]
     # New session state variables
@@ -399,7 +400,8 @@ def main():
             # "qwen": "Qwen Transformer Generator",
             # "pegasus": "Pegasus Transformer Generator",
             # "custom": "Custom Transformer Generator"
-            "gpt2": "GPT-2 Transformer Generator"
+            "gpt2": "GPT-2 Transformer Generator",
+            "pegasus": "Pegasus Transformer Generator"
         }
         selected_model = st.selectbox(
             "Select Review Model",
