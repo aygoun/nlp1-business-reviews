@@ -52,6 +52,7 @@ class YelpReviewClassifier:
             raise FileNotFoundError("Model file not found.")
 
     def predict_stars(self, reviews):
+        reviews = [review for review in reviews if isinstance(review, str)]
         if not self.pipeline:
             raise ValueError("Pipeline not loaded.")
         return self.pipeline.predict(reviews)

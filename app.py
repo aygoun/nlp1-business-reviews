@@ -15,6 +15,7 @@ from text_gen.transformer.Custom_prompting import CustomReviewGenerator
 # from text_gen.transformer.Pegasus_prompting import PegasusReviewGenerator
 from classification.NaiveBayes.StarsAnalyzerNB import SentimentAnalyzerNB
 from classification.Transformer.Transformer import ClassificationTransformer
+from classification.RecurrentNeuralNetwork.recurrent_nn import YelpReviewClassifier
 
 from text_gen.transformer.Gpt2_inferring import GPT2ReviewGenerator
 
@@ -91,10 +92,12 @@ def load_classification_models():
     """
     bayes = SentimentAnalyzerNB("")
     bayes.init()
+    rnn = YelpReviewClassifier()
+    rnn.load_model_and_tokenizer()
     transformer = ClassificationTransformer("models/Classification_Transformer")
 
 
-    return bayes, transformer
+    return bayes, rnn, transformer
 
 # Function to load business data
 @st.cache_data
@@ -183,6 +186,8 @@ def generate_review(business, model_type, nb_stars):
     # review = f"This is a generated review for {business_name}. The service was excellent and the food was delicious!"  # Simulate generated review
     # sentiment_score = random.uniform(1.0, 5.0)  # Simulate sentiment score
     sentiment_score = st.session_state.class_model.predict_stars(review)
+    print("DEBUUUUUUUUG")
+    print(sentiment_score)
     
     return review, float(sentiment_score)
 
@@ -350,8 +355,8 @@ def main():
     if 'sentiment_score' not in st.session_state:
         st.session_state.sentiment_score = 0
     if 'classidication_models' not in st.session_state:
-        bayes, transformer_model = load_classification_models()
-        st.session_state.classification_models = {"transformer": transformer_model, "bayes": bayes}
+        bayes, rnn, transformer_model = load_classification_models()
+        st.session_state.classification_models = {"transformer": transformer_model, "bayes": bayes, "rnn": rnn}
     if 'class_model' not in st.session_state:
         st.session_state.class_model = st.session_state.classification_models["transformer"]
     if 'generative_models' not in st.session_state:
@@ -397,9 +402,6 @@ def main():
         # Model selection
         st.subheader("Review Generation")
         model_options = {
-            # "qwen": "Qwen Transformer Generator",
-            # "pegasus": "Pegasus Transformer Generator",
-            # "custom": "Custom Transformer Generator"
             "gpt2": "GPT-2 Transformer Generator",
             "pegasus": "Pegasus Transformer Generator"
         }
@@ -417,9 +419,8 @@ def main():
         # Sentiment analysis model selection
         st.subheader("Sentiment Analysis")
         sentiment_model_options = {
-            # "basic": "Basic Sentiment Analysis",
-            # "advanced": "Advanced Sentiment Analysis"
             "bayes": "Naive Bayes Sentiment Analysis",
+            "rnn": "Recurrent Neural Network Sentiment Analysis",
             "transformer": "Transformer Sentiment Analysis",
         }
         selected_sentiment_model = st.selectbox(

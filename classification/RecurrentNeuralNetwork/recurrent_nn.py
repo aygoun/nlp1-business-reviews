@@ -260,7 +260,7 @@ class YelpReviewClassifier:
             'classification_report': report
         }
     
-    def predict(self, text):
+    def predict_stars(self, text):
         """
         Predict the rating for a new review.
         
@@ -282,7 +282,7 @@ class YelpReviewClassifier:
         rating = np.argmax(prediction)
         confidence = prediction[rating]
         
-        return rating, confidence, prediction
+        return rating#, confidence, prediction
 
     def save_model_and_tokenizer(self, path='./models/yelp_classifier_bundle.pkl'):
         if self.model is None or self.tokenizer is None:
