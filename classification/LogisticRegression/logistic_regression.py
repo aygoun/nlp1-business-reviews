@@ -1,49 +1,75 @@
 import pandas as pd
-import numpy as np
+import pickle
+import os
 from sklearn.model_selection import train_test_split
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.linear_model import LogisticRegression
+from sklearn.pipeline import Pipeline
 from sklearn.metrics import accuracy_score, classification_report
 
-# Load the dataset
-df = pd.read_json('data_set/yelp_subset_review.json', lines=True)
+class YelpReviewClassifier:
+    def __init__(self, model_path='./models/logistic_regression_model.pkl'):
+        self.model_path = model_path
+        self.pipeline = None
 
-df['label'] = df['stars'].apply(lambda x: 1 if x > 3.5 else 0)  # 1 for positive, 0 for negative
+    def train(self, data_path):
+        # Load dataset
+        df = pd.read_json(data_path, lines=True)
+        df['label'] = df['stars'].apply(lambda x: 1 if x > 3.5 else 0)
 
-# Split the data into train and test sets
-X = df['text']  # Reviews
-y = df['label']   # Labels (positive or negative)
+        X = df['text']
+        y = df['label']
 
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
 
-# Convert text to numeric data using TF-IDF
-vectorizer = TfidfVectorizer(stop_words='english', max_features=5000)
-X_train_tfidf = vectorizer.fit_transform(X_train)
-X_test_tfidf = vectorizer.transform(X_test)
+        # Define pipeline (vectorizer + model)
+        self.pipeline = Pipeline([
+            ('tfidf', TfidfVectorizer(stop_words='english', max_features=5000)),
+            ('clf', LogisticRegression())
+        ])
 
-# Logistic Regression Model
-model = LogisticRegression()
-model.fit(X_train_tfidf, y_train)
+        # Train
+        self.pipeline.fit(X_train, y_train)
 
-y_pred = model.predict(X_test_tfidf)
+        # Evaluate
+        y_pred = self.pipeline.predict(X_test)
+        print(f"Accuracy: {accuracy_score(y_test, y_pred) * 100:.2f}%")
+        print("Classification Report:")
+        print(classification_report(y_test, y_pred))
 
-# Predict categories for new reviews
-def classify_category(review):
-    X_new = vectorizer.transform([review])
-    return model.predict(X_new)[0]
+        # Save pipeline
+        self.save()
 
-# New reviews
-new_review = "Never had a greater dinner in my life. Go !!!"
-predicted_label = classify_category(new_review)
-print(f"Predicted Label for the review: {predicted_label} (1 = Positive, 0 = Negative)")
+    def save(self):
+        with open(self.model_path, 'wb') as f:
+            pickle.dump(self.pipeline, f)
 
-new_review = "The food was amazing and the service was excellent!"
-predicted_label = classify_category(new_review)
-print(f"Predicted Label for the review: {predicted_label} (1 = Positive, 0 = Negative)")
+    def load(self):
+        if os.path.exists(self.model_path):
+            with open(self.model_path, 'rb') as f:
+                self.pipeline = pickle.load(f)
+        else:
+            raise FileNotFoundError("Model file not found.")
 
-# Evaluate the model
-accuracy = accuracy_score(y_test, y_pred)
-print(f"Accuracy: {accuracy * 100:.2f}%")
+    def predict_stars(self, reviews):
+        if not self.pipeline:
+            raise ValueError("Pipeline not loaded.")
+        return self.pipeline.predict(reviews)
 
-print("Classification Report:")
-print(classification_report(y_test, y_pred))
+# Exemple d'utilisation
+if __name__ == "__main__":
+    classifier = YelpReviewClassifier()
+
+    # Première fois (entraînement et sauvegarde)
+    #classifier.train('data_set/yelp_subset_review.json')
+
+    # Utilisation ultérieure
+    classifier.load()
+    reviews = [
+        "Never had a greater dinner in my life. Go !!!",
+        "The food was amazing and the service was excellent!",
+        "The service was good but the food was cold."
+    ]
+    predictions = classifier.predict_stars(reviews)
+    for review, pred in zip(reviews, predictions):
+        print(f"Review: {review} --> Predicted label: {pred} (1 = Positive, 0 = Negative)")
