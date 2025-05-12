@@ -8,13 +8,17 @@
 - Baptiste Arnold
 - Gabriel Monteillard
 
+## Report
+
+[Link to the PDF report](./NLP_Groupe_6_rapport.pdf)
+
 ## List of tasks
 
 ### Dataset
 
-- [X] Present the dataset (Aurélien)
+- [x] Present the dataset (Aurélien)
 - [x] Pre-processing (normalization and token) (Armand)
-- [X] Exploratory analysis (statistics, classes, token, ...) (Aurélien)
+- [x] Exploratory analysis (statistics, classes, token, ...) (Aurélien)
 
 ---
 
@@ -23,15 +27,15 @@
 #### Data representation
 
 - [x] tf-idf (Armand / Angela)
-- [ ] word2vec (Armand / Angela)
+- [x] word2vec (Armand / Angela)
 
 #### Models
 
 - [x] Naive Bayesian (Armand)
 - [x] Logistic Regression (Angela)
-- [ ] Feedforward neural network (Gabriel)
-- [ ] Recurent neural network (Angela)
-- [ ] Transformer (Aurélien)
+- [x] Feedforward neural network (Gabriel)
+- [x] Recurent neural network (Angela)
+- [x] Transformer (Aurélien)
 
 ---
 
@@ -39,15 +43,15 @@
 
 #### Data representation
 
-- [ ] tf-idf
-- [ ] word2vec
-- [ ] n-gram
+- [x] tf-idf
+- [x] word2vec
+- [x] n-gram
 
 #### Models
 
-- [ ] Feedforward neural network (Armand)
-- [ ] Recurent neural network (Gabriel)
-- [ ] Transformer (Baptiste)
+- [x] Feedforward neural network (Armand)
+- [x] Recurent neural network (Gabriel)
+- [x] Transformer (Baptiste)
 
 ---
 
