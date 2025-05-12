@@ -233,7 +233,7 @@ def main():
     plt.title('Test Accuracy During Training')
     
     plt.tight_layout()
-    plt.savefig('training_progress.png')
+    plt.savefig('./classification/FeedForwardNN/training_progress.png')
     plt.show()
     
     # Example prediction function
@@ -279,12 +279,12 @@ def main():
             'n_layers': N_LAYERS,
             'dropout': DROPOUT
         }
-    }, 'review_classifier_model.pth')
+    }, './classification/FeedForwardNN/review_classifier_model.pth')
     
     print("\nModel saved to 'review_classifier_model.pth'")
 
-# if __name__ == "__main__":
-#     main()
+if __name__ == "__main__":
+    main()
 
 # Example of loading and using the saved model
 def load_and_use_model(model_path, review_text):
