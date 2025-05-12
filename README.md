@@ -10,7 +10,7 @@
 
 ## Report
 
-[Link to the PDF report](./NLP_Groupe_6_rapport.pdf)
+[Link to the PDF report](./NLP_Groupe_6_Rapport.pdf)
 
 ## List of tasks
 
