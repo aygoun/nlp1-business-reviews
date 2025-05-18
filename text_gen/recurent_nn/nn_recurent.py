@@ -283,7 +283,7 @@ class TextGenerator:
 # Example usage
 if __name__ == "__main__":
     # Create a text generator instance
-    generator = TextGenerator(epochs=5)  # Reduced epochs for demonstration
+    generator = TextGenerator(epochs=15)  # Reduced epochs for demonstration
     
     # Generate text with different temperatures
     print("\nGenerated text examples:")
