@@ -23,7 +23,7 @@ HIDDEN_DIM = 256
 NUM_LAYERS = 2
 DROPOUT = 0.2
 BATCH_SIZE = 64
-EPOCHS = 15
+EPOCHS = 2
 MAX_LENGTH = 50
 EARLY_STOPPING_PATIENCE = 3
 
@@ -261,8 +261,7 @@ def train_model(model, train_data, val_data, token_to_index, index_to_token):
     checkpoint = torch.load(MODEL_PATH, map_location=device)
     model.load_state_dict(checkpoint['model_state_dict'])
     
-    # Return model and token mappings to match original function signature
-    return model, token_to_index, index_to_token
+    return model
 
 # Improved text generation function with better error handling
 def generate_text(model, seed_text, token_to_index, index_to_token, tokenizer, num_words=10, temperature=1.0):
@@ -411,7 +410,7 @@ def main():
     else:
         print("Training new model...")
         model = RNNModel(vocab_size, EMBEDDING_DIM, HIDDEN_DIM, NUM_LAYERS, DROPOUT).to(device)
-        model, token_to_index, index_to_token = train_model(model, train_data, val_data, token_to_index, index_to_token)
+        model = train_model(model, train_data, val_data, token_to_index, index_to_token)
     
     # Generate text with different temperatures
     sentences = [" ".join(sent) for sent in sentence_polarity.sents()]
