@@ -38,7 +38,6 @@ class ReviewDataset(Dataset):
             
         return torch.tensor(seq, dtype=torch.long), torch.tensor(rating - 1, dtype=torch.long)  # 0-indexed classes
 
-# Keep the original ReviewClassifier class
 class ReviewClassifier(nn.Module):
     def __init__(self, vocab_size, embedding_dim, hidden_dim, output_dim, n_layers, dropout):
         super().__init__()
@@ -475,3 +474,4 @@ if __name__ == "__main__":
     rating = predictor.predict_stars(review)
     print(f"Review: {review}")
     print(f"Predicted Rating: {rating} stars")
+
